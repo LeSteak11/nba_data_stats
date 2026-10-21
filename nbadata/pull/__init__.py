@@ -175,25 +175,22 @@ def pull_season(client, cfg, season, failures, recent_days, ui):
 
 # ---------- progress per season (reads only the cache, safe during a pull) ----------
 
-PER_GAME_FOLDERS = ["boxscoretraditionalv3", "boxscoreadvancedv3", "playbyplayv3", "boxscorematchupsv3"]
-
-
 def season_progress(cfg) -> dict:
-    """season -> (games fully downloaded, games known). Seasons with no game list yet -> (0, None)."""
+    """season -> (games fully downloaded, games known). Seasons with no game list yet -> (0, None).
+
+    Fast: it works out each game's cache file names from its id (the same way the pull does) and
+    only checks that they exist, instead of opening ~20,000 files."""
     from ..config import all_seasons
+    from ..http import cache_key
     cache = cfg["paths"]["cache_dir"]
+    existing = {p.name for p in cache.glob("*/*.json.gz")}
 
-    def game_id(meta_path):
-        try:
-            return json.loads(meta_path.read_text(encoding="utf-8"))["params"].get("GameID")
-        except (OSError, ValueError, KeyError):
-            return None  # damaged by a shutdown mid-write: counts as not downloaded
-
-    def game_ids(endpoint):
-        return {game_id(m) for m in (cache / endpoint).glob("*.meta.json")} - {None}
-
-    done_sets = [game_ids(e) for e in PER_GAME_FOLDERS]
-    done = set.intersection(*done_sets) if done_sets else set()
+    def downloaded(gid):
+        for cls, _ in PER_GAME:
+            e = cls(game_id=gid, get_request=False)
+            if f"{cache_key(e.endpoint, e.parameters)}.json.gz" not in existing:
+                return False
+        return True
 
     season_games = {}
     for meta in (cache / "leaguegamelog").glob("*.meta.json"):
@@ -206,7 +203,7 @@ def season_progress(cfg) -> dict:
     out = {}
     for season in all_seasons(cfg):
         games = season_games.get(season)
-        out[season] = (len(games & done), len(games)) if games else (0, None)
+        out[season] = (sum(downloaded(g) for g in games), len(games)) if games else (0, None)
     return out
 
 
