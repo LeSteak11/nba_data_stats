@@ -105,3 +105,25 @@ why = "Williams, Jalen: OKC on/off data is missing game 0022200443. Seen 2026-10
 check = "on_off_on_minutes_equal_box"
 row = { season = "2022-23", season_type = "Regular Season", team_id = 1610612760, player_id = 1629652, on_min = 2241.54 }
 why = "Dort, Luguentz: OKC on/off data is missing game 0022200443. Seen 2026-10-21."
+
+# ---------- 2021-22 ----------
+
+[[gap]]
+check = "game_completeness"
+row = { game_id = "0022100132", missing_traditional = false, missing_advanced = false, missing_pbp = false, missing_matchups = true }
+why = "BoxScoreMatchupsV3 answers with an empty team shell (teamId 0, no players). Seen 2026-10-21."
+
+[[gap]]
+check = "matchup_players_in_game"
+row = { game_id = "0022101164", off_player_id = 2617, def_player_id = 1630792 }
+why = "Matchups list Malcolm Hill guarding Heat players (29 s in total), but he isn't in this game's box score or play-by-play. Seen 2026-10-21."
+
+[[gap]]
+check = "matchup_players_in_game"
+row = { game_id = "0022101164", off_player_id = 1629130, def_player_id = 1630792 }
+why = "Matchups list Malcolm Hill guarding Heat players (29 s in total), but he isn't in this game's box score or play-by-play. Seen 2026-10-21."
+
+[[gap]]
+check = "matchup_players_in_game"
+row = { game_id = "0022101164", off_player_id = 1630209, def_player_id = 1630792 }
+why = "Matchups list Malcolm Hill guarding Heat players (29 s in total), but he isn't in this game's box score or play-by-play. Seen 2026-10-21."
