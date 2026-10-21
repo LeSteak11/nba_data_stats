@@ -242,3 +242,76 @@ def summary_table(rows, title):
     for k, v in rows:
         t.add_row(k, v)
     return t
+
+
+def print_finish(cfg, seasons, pull_code, build_code, console=None):
+    """The last thing a pull + build prints: is it safe to close, did it work, what's next.
+
+    pull_code: 0 ok, 1 some downloads failed, 2 stopped (blocked), 130 stopped (Ctrl+C).
+    build_code: None if the build didn't run, 0 every check passed, 1 an error-level check failed, 3 DB in use.
+    """
+    import json
+
+    import duckdb
+
+    from .checks import load_known_gaps
+    from .db import db_path
+    from .pull import next_season
+
+    console = console or Console()
+    lines = []
+    if build_code is None:
+        title, style = "STOPPED: the database was not rebuilt", "red"
+        lines.append("Everything downloaded so far is saved. Run the same command again to continue.")
+    else:
+        failing = []
+        if build_code != 3:
+            with duckdb.connect(str(db_path(cfg)), read_only=True) as con:
+                games = dict(con.execute(
+                    "SELECT season, count(*) FROM clean.games WHERE season IN (SELECT unnest(?)) GROUP BY 1",
+                    [seasons]).fetchall())
+                failing = con.execute("SELECT check_name, severity, n_offending FROM meta.dq_results "
+                                      "WHERE NOT passed ORDER BY severity, check_name").fetchall()
+                n_known = con.execute("SELECT sum(n_known) FROM meta.dq_results").fetchone()[0] or 0
+            for s in seasons:
+                lines.append(f"{s}: {games.get(s, 0):,} games in the database")
+            errors = [f for f in failing if f[1] == "error"]
+            if errors:
+                lines.append("")
+                lines.append("[bold]Needs review[/] (rows in data/dq/<check>.csv):")
+                lines += [f"  • {name}: {n} row{'s' * (n != 1)}" for name, _, n in errors]
+                lines.append("Paste this window's output to Claude to sort out whether it's NBA.com's data or a bug.")
+            else:
+                lines.append("All error checks pass" + (f" ({n_known} known NBA.com gaps, listed in data/dq/*.known.csv)"
+                                                       if n_known else ""))
+            warns = [name for name, sev, _ in failing if sev == "warn"]
+            if warns:
+                lines.append(f"[dim]Warnings (usually fine): {', '.join(warns)}[/]")
+        else:
+            lines.append("The new database is saved as nba.building.duckdb: close whatever has nba.duckdb open, "
+                         "then run `python -m nbadata build-db`.")
+
+        failures_file = cfg["paths"]["log_dir"] / "pull_failures.json"
+        try:
+            failed = json.loads(failures_file.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            failed = []
+        known_games = {g["row"].get("game_id") for g in load_known_gaps()}
+        unknown = [f for f in failed if f["what"].split()[-1] not in known_games]
+        if unknown:
+            lines.append(f"[yellow]{len(unknown)} downloads failed[/] (see {failures_file}). "
+                         "Run the same command again to retry just those.")
+
+        ok = build_code == 0 and not unknown
+        title, style = ("DONE: safe to close this window", "green") if ok else \
+                       ("DONE, but something needs a look: safe to close this window", "yellow")
+
+    upcoming = next_season(cfg)
+    lines.append("")
+    if upcoming:
+        lines.append(f"Next season: [bold]{upcoming}[/]. Double-click [bold]run_next_season.bat[/] "
+                     "(or run `python -m nbadata next`).")
+    else:
+        lines.append("Every completed season is downloaded.")
+    console.print()
+    console.print(Panel("\n".join(lines), title=f"[bold]{title}[/]", border_style=style, expand=False))

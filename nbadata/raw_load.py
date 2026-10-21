@@ -33,7 +33,12 @@ RAW_ENDPOINTS = {
     "shotchartdetail": False,
     "leaguedashlineups": False,
     "teamplayeronoffdetails": False,
+    "leaguestandingsv3": False,
 }
+
+# Endpoints a cache may not have yet (added after seasons were already downloaded). If nothing is
+# cached, an empty table with the columns the clean SQL uses is created instead.
+OPTIONAL = {"leaguestandingsv3": {"standings": ["SeasonID", "TeamID", "Conference", "Division"]}}
 
 FLUSH_EVERY = 300  # files per insert batch (keeps memory low on the big play-by-play load)
 
@@ -56,9 +61,15 @@ def _text(v):
 def load_all(con, cache_dir: Path):
     con.execute("CREATE SCHEMA IF NOT EXISTS raw")
     missing = [e for e in RAW_ENDPOINTS if not any((cache_dir / e).glob("*.meta.json"))]
-    if missing:
+    if [e for e in missing if e not in OPTIONAL]:
         raise RuntimeError(f"No cached data yet for: {', '.join(missing)}. Run the pull first.")
     for endpoint, is_v3 in RAW_ENDPOINTS.items():
+        if endpoint in missing:
+            for name, cols in OPTIONAL[endpoint].items():
+                col_sql = ", ".join(f'"{c}" VARCHAR' for c in cols + ["_params", "_fetched_at", "_cache_key"])
+                con.execute(f'CREATE TABLE raw."{endpoint}__{snake(name)}" ({col_sql})')
+            print(f"  raw  {endpoint:<24} {0:>6} responses  (none cached yet)")
+            continue
         n_files, rows = load_endpoint(con, cache_dir / endpoint, endpoint, is_v3)
         print(f"  raw  {endpoint:<24} {n_files:>6} responses  {rows}")
 

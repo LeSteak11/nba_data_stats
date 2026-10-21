@@ -12,6 +12,7 @@ import duckdb
 
 from . import raw_load
 from .checks import run_checks
+from .config import dataset_first_seasons
 
 CLEAN_DIR = Path(__file__).parent / "clean"
 
@@ -43,7 +44,7 @@ def build_db(cfg) -> int:
                 n = con.sql(f"SELECT count(*) FROM clean.{table}").fetchone()[0]
                 print(f"  clean.{table:<16} {n:>10,} rows")
 
-        failed = run_checks(con, cfg["paths"]["data_dir"] / "dq")
+        failed = run_checks(con, cfg["paths"]["data_dir"] / "dq", first_seasons=dataset_first_seasons(cfg))
     finally:
         con.close()
 
@@ -69,4 +70,4 @@ def run_query(cfg, sql: str, max_rows: int = 40) -> int:
 
 def recheck(cfg) -> int:
     with duckdb.connect(str(db_path(cfg))) as con:
-        return 1 if run_checks(con, cfg["paths"]["data_dir"] / "dq") else 0
+        return 1 if run_checks(con, cfg["paths"]["data_dir"] / "dq", first_seasons=dataset_first_seasons(cfg)) else 0

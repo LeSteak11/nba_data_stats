@@ -37,6 +37,11 @@ class FetchError(Exception):
     """A single request failed after all retries (or failed in a non-retryable way)."""
 
 
+class EmptyResponse(FetchError):
+    """NBA.com answered, but with nothing usable (no rows, or a shell nba_api can't parse).
+    Not cached. Usually means NBA.com simply has no such data."""
+
+
 class BlockedError(Exception):
     """Several requests in a row failed. Probably rate-limited/blocked: stop and wait."""
 
@@ -112,11 +117,11 @@ class NBAClient:
             # Valid JSON that nba_api can't parse, e.g. a V3 box score with an empty team shell
             # (teamId 0, no players). Treat it like an empty answer: don't keep it, report it.
             self.forget(ep.endpoint, ep.parameters)
-            raise FetchError(f"{ep.endpoint} response could not be parsed ({type(e).__name__}: {e}) "
+            raise EmptyResponse(f"{ep.endpoint} response could not be parsed ({type(e).__name__}: {e}) "
                              f"for {ep.parameters}") from e
         if require_rows and not getattr(ep, require_rows).get_dict().get("data"):
             self.forget(ep.endpoint, ep.parameters)
-            raise FetchError(f"{ep.endpoint} returned no {require_rows} rows for {ep.parameters}")
+            raise EmptyResponse(f"{ep.endpoint} returned no {require_rows} rows for {ep.parameters}")
         return ep
 
     def forget(self, endpoint: str, params: dict):

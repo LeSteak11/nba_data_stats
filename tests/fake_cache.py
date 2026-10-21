@@ -210,6 +210,12 @@ def on_off(team):
     return legacy("PlayersOnCourtTeamPlayerOnOffDetails", hdr, rows("On", 48.0), [overall, off])
 
 
+def standings():
+    hdr = ["LeagueID", "SeasonID", "TeamID", "TeamCity", "TeamName", "Conference", "Division"]
+    return legacy("Standings", hdr, [["00", "22024", BOS, "Boston", "Celtics", "East", "Atlantic"],
+                                     ["00", "22024", NYK, "New York", "Knicks", "East", "Atlantic"]])
+
+
 def players_lists():
     cap_hdr = ["PERSON_ID", "DISPLAY_LAST_COMMA_FIRST", "DISPLAY_FIRST_LAST", "ROSTERSTATUS", "FROM_YEAR", "TO_YEAR",
                "PLAYERCODE", "PLAYER_SLUG", "TEAM_ID", "TEAM_CITY", "TEAM_NAME", "TEAM_ABBREVIATION", "TEAM_CODE",

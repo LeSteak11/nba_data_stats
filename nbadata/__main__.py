@@ -36,22 +36,50 @@ def _seasons(cfg, args):
 
 
 def cmd_pull(cfg, args):
+    from .awake import keep_awake
     from .pull import run_pull
-    return run_pull(cfg, _seasons(cfg, args))
+    with keep_awake():
+        return run_pull(cfg, _seasons(cfg, args))
 
 
 def cmd_build_db(cfg, args):
+    from .awake import keep_awake
     from .db import build_db
-    return build_db(cfg)
+    with keep_awake():
+        return build_db(cfg)
+
+
+def cmd_next(cfg, args):
+    """Pull + build the next season that isn't downloaded yet (newest first)."""
+    from .pull import next_season
+    season = next_season(cfg)
+    if season is None:
+        print("Every completed season is downloaded. The current season is kept up to date with "
+              "`python -m nbadata update` (Stage 4, coming).")
+        return 0
+    print(f"Next season: {season}")
+    args.season, args.all = [season], False
+    return cmd_build(cfg, args)
 
 
 def cmd_build(cfg, args):
+    from .awake import keep_awake
+    from .ui import print_finish
+    seasons = _seasons(cfg, args)
+    with keep_awake():
+        code, build_code = _pull_then_build(cfg, args)
+    print_finish(cfg, seasons, code, build_code)
+    return build_code or code
+
+
+def _pull_then_build(cfg, args):
     code = cmd_pull(cfg, args)
     if code in (2, 130):  # stopped (NBA.com blocking us, or Ctrl+C): don't build on top of that
-        return code
+        return code, None
     if code == 1:
-        print("\nSome requests failed (see above). Building anyway: the checks will show what's missing.\n")
-    return cmd_build_db(cfg, args) or code
+        print("\nSome requests failed (see above). Building anyway: the checks will show what's missing.")
+    print("\nBuilding the database now (a few minutes). Don't close this window yet.\n")
+    return code, cmd_build_db(cfg, args)
 
 
 def cmd_check(cfg, args):
@@ -106,6 +134,7 @@ def main(argv=None):
         p = sub.add_parser(name, help=help_)
         p.add_argument("--season", action="append", help="e.g. 2024-25 (repeat for several)")
         p.add_argument("--all", action="store_true", help="every season in config.toml")
+    sub.add_parser("next", help="Pull + build the next season that isn't downloaded yet, newest first")
     sub.add_parser("build-db", help="Rebuild the database from the cache, then run checks (no downloading)")
     sub.add_parser("check", help="Re-run the data-quality checks on the existing database")
     q = sub.add_parser("query", help='Run SQL and print the result: query "SELECT ..."')
@@ -116,7 +145,7 @@ def main(argv=None):
     cfg = load_config()
     _setup_logging(cfg)
     handlers = {"smoke": cmd_smoke, "cache-info": cmd_cache_info, "pull": cmd_pull, "build": cmd_build,
-                "build-db": cmd_build_db, "check": cmd_check, "query": cmd_query, "progress": cmd_progress}
+                "build-db": cmd_build_db, "next": cmd_next, "check": cmd_check, "query": cmd_query, "progress": cmd_progress}
     from .http import BlockedError
     try:
         return handlers[args.command](cfg, args)

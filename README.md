@@ -1,9 +1,10 @@
 # nba-data
 
 Local NBA research database: NBA.com stats → DuckDB, in three layers (raw → clean → analysis).
-Seasons 2021-22 through the current 2026-27 season, regular season + play-in + playoffs.
+Seasons 2000-01 through the current 2026-27 season (set in `config.toml`), regular season + play-in + playoffs.
 
-> **Status: Stage 2 of 4.** Pull → raw → clean → data checks work for any season. 2024-25 is built with every check passing.
+> **Status: Stage 2 of 4.** Pull → raw → clean → data checks work for any season. 2021-22 through 2024-25 are built
+> with every error check passing; older seasons are pulled one at a time with `run_next_season.bat`.
 > Still to come: analysis views, data dictionary, export (Stage 3), `update` command (Stage 4).
 > Sections marked *(coming)* don't work yet.
 
@@ -55,6 +56,7 @@ From here on, the commands are the same on both systems (with the venv active, `
 | `python -m nbadata smoke` | Stage 0: one live call per NBA.com endpoint we use. Writes `data/smoke_report.json`. |
 | `python -m nbadata cache-info` | How many responses are cached, and how big. |
 | `python -m nbadata progress` | How many games are fully downloaded, per season. Safe to run in a second tab during a pull. |
+| `python -m nbadata next` | Pull + build the next season that isn't downloaded yet (newest first). Same as double-clicking `run_next_season.bat`. |
 | `python -m nbadata build --season 2024-25` | Pull that season (only what isn't cached yet), rebuild the database, run checks. `--all` = every season. |
 | `python -m nbadata pull --season 2024-25` | Just the downloading part. |
 | `python -m nbadata build-db` | Just the database part: rebuild everything from the cache (minutes, no internet needed). |
@@ -67,7 +69,9 @@ From here on, the commands are the same on both systems (with the venv active, `
 
 | What | Requests | Time |
 |---|---|---|
-| One full season, first time | ~5,500 | ~2.5 hours of downloading (~36 requests/min) if NBA.com doesn't block you |
+| One full season, first time (2017-18 on) | ~5,500 | ~2.2 hours (~41 requests/min) if NBA.com doesn't block you |
+| One full season, 2007-08 to 2016-17 (no matchups) | ~4,200 | ~1.7 hours |
+| One full season, before 2007-08 (no matchups, lineups or on/off) | ~3,800 | ~1.5 hours |
 | Same thing again (all cached) | 0 | seconds |
 | `build-db` (rebuild database from cache) | 0 | a few minutes |
 
@@ -75,17 +79,37 @@ From here on, the commands are the same on both systems (with the venv active, `
 restarts. Two fixes since then (a fresh connection every 450 requests, and right after any timeout) should
 keep a season close to the 2.5 h.
 
-**Pull one season per run**, in this order: 2023-24, 2022-23, 2021-22, 2025-26, then the current 2026-27.
-(`--all` still works, but one season at a time keeps each run short and easy to check.)
+### Adding the next season
+
+**Double-click `run_next_season.bat`** in the project folder (or run `python -m nbadata next`). It picks the
+newest season that isn't downloaded yet, pulls it, rebuilds the database, runs the checks, and ends with a box
+that says whether it's safe to close, whether anything needs a look, and which season is next. One season per
+run, newest first, down to `oldest` in `config.toml`. `python -m nbadata progress` shows where every season stands.
+
+A season counts as done when every game is downloaded, apart from games listed as known NBA.com gaps.
 
 While a pull runs in a terminal you get a live dashboard: a progress bar per step with an ETA, requests per
 minute, retries and failures, a countdown during breaks and retry waits, and the latest events. At the end
 it prints a summary and how far along every season is. **Ctrl+C stops safely**; run the same command to continue.
 
-**Long pulls: keep the computer awake.** If it sleeps, the internet drops, requests start failing, and the run stops itself.
-On a Mac, put `caffeinate -i` in front: `caffeinate -i python -m nbadata build --season 2024-25`.
-On Windows: Settings → System → Power → set "Sleep" to Never while it runs.
+**The computer stays awake by itself** while `build`, `next`, `pull` or `build-db` runs (the screen may still turn
+off), and normal sleep settings come back when it ends. Closing a laptop lid still puts it to sleep.
 If a run stops or dies for any reason, just run the same command again. It picks up where it left off.
+
+### What NBA.com has for older seasons
+
+Checked with test requests on 2026-10-21. Earlier seasons simply skip a dataset: it isn't downloaded and
+the checks don't expect it (the first seasons are in `config.toml` under `[datasets]`).
+
+| Dataset | First season |
+|---|---|
+| Game lists, box scores (traditional + advanced), play-by-play, shot charts, standings | 1996-97 or earlier |
+| 5-man lineups, player on/off | 2007-08 |
+| Matchups (who guarded whom) | 2017-18 |
+| Play-in games | 2019-20 (the season type is just empty before) |
+
+Conference and division come from each season's standings, so pre-2004 divisions (Midwest, old Central)
+and moved teams (Vancouver, Seattle, New Jersey, Charlotte) are right for their season.
 
 ## Data-quality checks
 
@@ -95,7 +119,9 @@ in the database in `meta.dq_results`.
 
 Some failures are gaps in NBA.com's own data (e.g. a game it has no matchup data for). Those exact rows are
 listed, with the reason, in `nbadata/known_gaps.toml`: they no longer fail the check, but the check still
-shows `(+N known NBA.com gaps)` and writes them to `data/dq/<check>.known.csv`. Highlights:
+shows `(+N known NBA.com gaps)` and writes them to `data/dq/<check>.known.csv`. A game NBA.com answers
+with empty matchup data is added to that list automatically during the pull; anything else new shows up under
+"Needs review" in the box at the end of the run. Highlights:
 
 - sum of player stats = team box score; team box score = NBA.com's official game log line
 - final score in play-by-play = official score; made shots / 3s / free throws counted from play-by-play = box score
@@ -142,7 +168,9 @@ Tables available: `clean.games`, `clean.teams`, `clean.players`, `clean.player_b
 ```
 nbadata/          Python package
   http.py         the only code that talks to NBA.com (cache, rate limit, retries)
-  ui.py           the live dashboard shown during a pull
+  ui.py           the live dashboard shown during a pull, and the box at the end
+  awake.py        keeps the computer from sleeping during long commands
+  known_gaps.toml rows of NBA.com's own data errors that the checks accept (with reasons)
   pull/           what to download for a season
   raw_load.py     cache -> raw.* tables (all text, exactly as received)
   clean/          one SQL file per clean.* table, run in number order
@@ -151,6 +179,7 @@ nbadata/          Python package
   analysis/       Stage 3: SQL views
 tests/            offline tests
 docs/             DATA_DICTIONARY.md, LATER.md
-config.toml       seasons, rate limits, paths
+config.toml       seasons, which datasets exist from when, rate limits, paths
+run_next_season.bat  double-click: pull + build the next season
 data/             (gitignored) cache, database, exports, logs
 ```

@@ -9,6 +9,9 @@ severity:  error = the data is wrong or missing; don't trust analysis that touch
 
 Rows listed in known_gaps.toml are NBA.com's own gaps: they don't fail a check, but are still
 counted (meta.dq_results.n_known) and written to data/dq/<check>.known.csv.
+
+Some datasets only exist from a certain season (lineups, on/off, matchups: see config.toml
+[datasets]). Checks read meta.datasets and don't expect them for earlier seasons.
 """
 
 import tomllib
@@ -17,6 +20,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 KNOWN_GAPS_PATH = Path(__file__).parent / "known_gaps.toml"
+
+# Regular-season games per season when it isn't 1230 (30 teams x 82 / 2).
+SHORT_SEASONS = {"1998-99": 725, "2011-12": 990, "2019-20": 1059, "2020-21": 1080}
+TWENTY_NINE_TEAMS_UNTIL = "2004-05"  # Charlotte Bobcats joined in 2004-05: 29 x 82 / 2 = 1189 before
+
+
+def _first(dataset: str) -> str:
+    """SQL for the first season NBA.com has an optional dataset (from meta.datasets)."""
+    return f"(SELECT first_season FROM meta.datasets WHERE dataset = '{dataset}')"
+
 
 STAT_COLS = ["pts", "fgm", "fga", "fg3m", "fg3a", "ftm", "fta", "oreb", "dreb", "reb", "ast", "stl", "blk", "tov", "pf"]
 
@@ -64,26 +77,34 @@ CHECKS = [
 
     # ---------- completeness ----------
     Check("game_completeness", "error",
-          "Every game has traditional box, advanced box, play-by-play and matchup data",
-          """SELECT g.game_id, g.season, g.season_type,
+          "Every game has traditional box, advanced box, play-by-play and (from 2017-18) matchup data",
+          f"""SELECT g.game_id, g.season, g.season_type,
                     g.game_id NOT IN (SELECT gameId FROM raw.boxscoretraditionalv3__player_stats) AS missing_traditional,
                     g.game_id NOT IN (SELECT gameId FROM raw.boxscoreadvancedv3__player_stats)    AS missing_advanced,
                     g.game_id NOT IN (SELECT gameId FROM raw.playbyplayv3__play_by_play)          AS missing_pbp,
-                    g.game_id NOT IN (SELECT gameId FROM raw.boxscorematchupsv3__player_stats)    AS missing_matchups
+                    g.game_id NOT IN (SELECT gameId FROM raw.boxscorematchupsv3__player_stats)
+                        AND g.season >= {_first("matchups")}                                      AS missing_matchups
              FROM clean.games g
              WHERE missing_traditional OR missing_advanced OR missing_pbp OR missing_matchups"""),
     Check("team_season_coverage", "error",
-          "Every team that played in a season type has shots, lineups and on/off data for it",
-          """WITH ts AS (SELECT DISTINCT season, season_type, team_id FROM clean.team_box)
+          "Every team that played in a season type has shots, plus lineups and on/off data (from 2007-08)",
+          f"""WITH ts AS (SELECT DISTINCT season, season_type, team_id FROM clean.team_box)
              SELECT ts.*,
                  NOT EXISTS (SELECT 1 FROM clean.shots s WHERE s.season = ts.season AND s.season_type = ts.season_type AND s.team_id = ts.team_id) AS missing_shots,
+                 ts.season >= {_first("lineups")} AND
                  NOT EXISTS (SELECT 1 FROM clean.lineups l WHERE l.season = ts.season AND l.season_type = ts.season_type AND l.team_id = ts.team_id) AS missing_lineups,
+                 ts.season >= {_first("on_off")} AND
                  NOT EXISTS (SELECT 1 FROM clean.player_on_off o WHERE o.season = ts.season AND o.season_type = ts.season_type AND o.team_id = ts.team_id) AS missing_on_off
              FROM ts WHERE missing_shots OR missing_lineups OR missing_on_off"""),
     Check("regular_season_game_count", "warn",
-          "A completed regular season has 1230 games (current season will be lower: expected)",
-          """SELECT season, count(*) AS games FROM clean.games
-             WHERE season_type = 'Regular Season' GROUP BY 1 HAVING games <> 1230"""),
+          "A completed regular season has its full game count: 1230, 1189 before 2004-05 (29 teams), "
+          "fewer in shortened seasons (current season will be lower: expected)",
+          f"""WITH short(season, expected) AS (VALUES {", ".join(f"('{k}', {v})" for k, v in SHORT_SEASONS.items())})
+             SELECT g.season, count(*) AS games,
+                    any_value(coalesce(short.expected,
+                              CASE WHEN g.season < '{TWENTY_NINE_TEAMS_UNTIL}' THEN 1189 ELSE 1230 END)) AS expected
+             FROM clean.games g LEFT JOIN short USING (season)
+             WHERE g.season_type = 'Regular Season' GROUP BY 1 HAVING games <> expected"""),
     Check("lineup_row_cap", "error",
           "No team returned exactly 2000 lineups (that would mean NBA.com truncated the list)",
           """SELECT season, season_type, team_id, count(*) AS n FROM clean.lineups
@@ -220,7 +241,8 @@ CHECKS = [
 ]
 
 
-def load_known_gaps(path: Path = KNOWN_GAPS_PATH) -> list[dict]:
+def load_known_gaps(path: Path | None = None) -> list[dict]:
+    path = path or KNOWN_GAPS_PATH
     if not path.exists():
         return []
     with open(path, "rb") as f:
@@ -245,13 +267,37 @@ def _split_known(df, gaps: list[dict]):
     return df[~known], df[known], unused
 
 
-def run_checks(con, out_dir: Path, known_gaps: list[dict] | None = None) -> int:
+def _toml_value(v) -> str:
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, (int, float)):
+        return repr(v)
+    return '"' + str(v).replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def record_known_gap(check: str, row: dict, why: str, path: Path | None = None) -> bool:
+    """Append one known NBA.com gap to known_gaps.toml. False if an identical entry is already there."""
+    path = path or KNOWN_GAPS_PATH
+    if any(g["check"] == check and g["row"] == row for g in load_known_gaps(path)):
+        return False
+    fields = ", ".join(f"{k} = {_toml_value(v)}" for k, v in row.items())
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(f'\n[[gap]]\ncheck = "{check}"\nrow = {{ {fields} }}\nwhy = {_toml_value(why)}\n')
+    return True
+
+
+def run_checks(con, out_dir: Path, known_gaps: list[dict] | None = None, first_seasons: dict | None = None) -> int:
     """Run every check, store results in meta.*, write offending rows to CSV. Returns # failed errors.
 
     known_gaps: offending rows that are NBA.com's own data gaps (see known_gaps.toml). They don't fail
-    the check but are still counted and written to <check>.known.csv. None = load known_gaps.toml."""
+    the check but are still counted and written to <check>.known.csv. None = load known_gaps.toml.
+    first_seasons: first season of each optional dataset (config.toml [datasets]). None = defaults."""
+    from .config import DATASET_FIRST_SEASON
     gaps = load_known_gaps() if known_gaps is None else known_gaps
     con.execute("CREATE SCHEMA IF NOT EXISTS meta")
+    con.execute("CREATE OR REPLACE TABLE meta.datasets (dataset VARCHAR, first_season VARCHAR)")
+    con.executemany("INSERT INTO meta.datasets VALUES (?, ?)",
+                    list((first_seasons or DATASET_FIRST_SEASON).items()))
     con.execute("""CREATE OR REPLACE TABLE meta.dq_results (
         check_name VARCHAR, severity VARCHAR, description VARCHAR, passed BOOLEAN,
         n_offending BIGINT, n_known BIGINT, sample_json VARCHAR, ran_at TIMESTAMP)""")

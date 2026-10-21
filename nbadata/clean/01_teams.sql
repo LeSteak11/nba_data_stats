@@ -1,6 +1,8 @@
 -- clean.teams: one row per team per season.
--- Conference/division are fixed for every season in this project (no realignment 2021-2027),
--- so they come from this small hand-written table. A check verifies every team gets one.
+-- Conference/division come from that season's standings (LeagueStandingsV3), because they changed
+-- over the years (realignment in 2004-05; Charlotte, New Orleans and Memphis moved).
+-- Seasons downloaded before standings were added fall back to this hand-written table, which is
+-- right from 2004-05 on. A check verifies every team gets one.
 CREATE TABLE clean.teams AS
 WITH conf(team_id, conference, division) AS (VALUES
     (1610612737, 'East', 'Southeast'), (1610612738, 'East', 'Atlantic'),  (1610612739, 'East', 'Central'),
@@ -21,7 +23,16 @@ ts AS (
         TEAM_ABBREVIATION      AS team_abbreviation,
         TEAM_NAME              AS team_name
     FROM raw.leaguegamelog__league_game_log
+),
+standings AS (
+    SELECT DISTINCT req(_params, 'Season') AS season, nint(TeamID) AS team_id,
+           Conference AS conference, Division AS division
+    FROM raw.leaguestandingsv3__standings
 )
-SELECT ts.season, ts.team_id, ts.team_abbreviation, ts.team_name, conf.conference, conf.division
-FROM ts LEFT JOIN conf USING (team_id)
+SELECT ts.season, ts.team_id, ts.team_abbreviation, ts.team_name,
+       coalesce(st.conference, CASE WHEN ts.season >= '2004-05' THEN conf.conference END) AS conference,
+       coalesce(st.division,   CASE WHEN ts.season >= '2004-05' THEN conf.division END)   AS division
+FROM ts
+LEFT JOIN standings st USING (season, team_id)
+LEFT JOIN conf USING (team_id)
 ORDER BY ts.season, ts.team_abbreviation;

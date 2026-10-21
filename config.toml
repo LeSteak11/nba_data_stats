@@ -1,10 +1,19 @@
 # Project settings. Paths are relative to this file's folder.
 
 [seasons]
-completed = ["2021-22", "2022-23", "2023-24", "2024-25", "2025-26"]
+# Every season from `oldest` up to `current` is in the project. `python -m nbadata next` pulls the
+# completed ones one at a time, newest first. NBA.com's box scores and play-by-play go back to 1996-97.
+oldest = "2000-01"
 current = "2026-27"
-pilot = "2024-25"            # the one season we build end to end first
 season_types = ["Regular Season", "PlayIn", "Playoffs"]
+
+[datasets]
+# First season NBA.com has each of these (checked 2026-10-21 with test requests). For earlier
+# seasons they're not downloaded and not checked: NBA.com just answers with nothing.
+# Everything else (box scores, advanced box, play-by-play, shot charts, standings) goes back further.
+lineups = "2007-08"           # 5-man lineups (LeagueDashLineups)
+on_off = "2007-08"            # player on/off court (TeamPlayerOnOffDetails)
+matchups = "2017-18"          # who guarded whom (BoxScoreMatchupsV3)
 
 [http]
 # Be polite to NBA.com. Faster = higher chance of getting blocked.

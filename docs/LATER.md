@@ -24,3 +24,10 @@ Ideas that are deliberately **not** in v1. Add to this list instead of growing v
   on 2026-10-20: ratings, usage, TS%, eFG%, possessions match exactly, but every estimated column
   (E_OFF_RATING, E_PACE, E_USG_PCT, ...) is different, the team TM_TOV_PCT is a different stat, and a
   few hundred player rows differ on rebound %, pace and PIE. Kept the per-game calls.
+
+## When there are many seasons
+- **Rebuild only the season that changed.** `build-db` rebuilds every season from the cache: ~1 min
+  per season, so ~30 min once all of 2000-01 onward is in. Loading just the new season's raw rows and
+  re-running the clean SQL for it would keep a build at a few minutes.
+- **Opt-in parallel downloads** (`workers = 2` in config.toml): each worker on its own connection with
+  the full gap, ~2x faster. Risk: NBA.com may limit the whole computer, not just one connection.
