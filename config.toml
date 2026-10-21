@@ -1,0 +1,24 @@
+# Project settings. Paths are relative to this file's folder.
+
+[seasons]
+completed = ["2021-22", "2022-23", "2023-24", "2024-25", "2025-26"]
+current = "2026-27"
+pilot = "2024-25"            # the one season we build end to end first
+season_types = ["Regular Season", "PlayIn", "Playoffs"]
+
+[http]
+# Be polite to NBA.com. Faster = higher chance of getting blocked.
+min_interval_seconds = 1.0    # minimum gap between live requests
+jitter_seconds = 0.6          # plus a random 0..jitter on top
+timeout_seconds = 45
+max_retries = 5               # per request, with exponential backoff
+backoff_base_seconds = 5      # waits 5, 10, 20, 40, 80 s
+# Observed 2026-10-20: one connection got blocked after ~570 requests (twice), even with a 45 s
+# pause in between. Stopping and restarting right away (= a fresh connection) never got blocked.
+# So every pause also opens a new connection.
+pause_every = 450             # take a break + reconnect every N live requests
+pause_seconds = 30
+max_consecutive_failures = 3  # this many requests in a row fail -> stop the run
+
+[paths]
+data_dir = "data"             # cache, database, exports, logs all live under here
