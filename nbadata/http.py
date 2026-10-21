@@ -94,7 +94,14 @@ class NBAClient:
         ep = endpoint_cls(**kwargs, get_request=False)
         text, url = self.get_text(ep.endpoint, ep.parameters, max_age_hours=max_age_hours, refresh=refresh)
         ep.nba_response = NBAStatsResponse(response=text, status_code=200, url=url)
-        ep.load_response()
+        try:
+            ep.load_response()
+        except (IndexError, KeyError, TypeError, ValueError) as e:
+            # Valid JSON that nba_api can't parse, e.g. a V3 box score with an empty team shell
+            # (teamId 0, no players). Treat it like an empty answer: don't keep it, report it.
+            self.forget(ep.endpoint, ep.parameters)
+            raise FetchError(f"{ep.endpoint} response could not be parsed ({type(e).__name__}: {e}) "
+                             f"for {ep.parameters}") from e
         if require_rows and not getattr(ep, require_rows).get_dict().get("data"):
             self.forget(ep.endpoint, ep.parameters)
             raise FetchError(f"{ep.endpoint} returned no {require_rows} rows for {ep.parameters}")

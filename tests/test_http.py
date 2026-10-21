@@ -136,6 +136,19 @@ def test_response_time_counts_toward_the_gap(cfg):
     assert sleeps == [pytest.approx(0.6)]
 
 
+def test_unparseable_response_is_a_failure_not_a_crash(cfg):
+    """NBA.com sometimes sends a V3 box score with an empty team shell; nba_api's parser crashes on it."""
+    from nba_api.stats.endpoints import BoxScoreMatchupsV3
+    empty_team = {"teamId": 0, "teamCity": None, "teamName": None, "teamTricode": None, "teamSlug": None,
+                  "players": []}
+    body = json.dumps({"meta": {}, "boxScoreMatchups": {"gameId": "0022300383", "awayTeamId": 1610612743,
+                       "homeTeamId": 1610612751, "homeTeam": empty_team, "awayTeam": empty_team}})
+    client, _ = make_client(cfg, FakeSession(FakeResponse(text=body)))
+    with pytest.raises(FetchError, match="could not be parsed"):
+        client.call(BoxScoreMatchupsV3, game_id="0022300383")
+    assert not list((cfg["paths"]["cache_dir"] / "boxscorematchupsv3").glob("*"))  # not kept in the cache
+
+
 def test_max_age_forces_refetch(cfg):
     session = FakeSession(FakeResponse(), FakeResponse())
     client, _ = make_client(cfg, session)
