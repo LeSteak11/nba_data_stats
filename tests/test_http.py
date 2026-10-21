@@ -75,6 +75,18 @@ def test_second_call_comes_from_cache(cfg):
     assert second.league_game_log.get_data_frame().equals(first.league_game_log.get_data_frame())
 
 
+def test_damaged_cache_entry_is_downloaded_again(cfg):
+    """A shutdown mid-write can leave a zero-filled file. It must be re-downloaded, not crash the run."""
+    session = FakeSession(FakeResponse(), FakeResponse())
+    client, _ = make_client(cfg, session)
+    client.call(LeagueGameLog, season="2024-25")
+    [meta] = (cfg["paths"]["cache_dir"] / "leaguegamelog").glob("*.meta.json")
+    meta.write_bytes(b"\x00" * 300)
+    df = client.call(LeagueGameLog, season="2024-25").league_game_log.get_data_frame()
+    assert len(session.calls) == 2 and df.loc[0, "PTS"] == 110
+    assert json.loads(meta.read_text(encoding="utf-8"))["params"]  # repaired on disk
+
+
 def test_cache_stores_body_exactly_as_received(cfg):
     import gzip
     client, _ = make_client(cfg, FakeSession(FakeResponse()))

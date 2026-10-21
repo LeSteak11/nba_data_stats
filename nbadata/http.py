@@ -50,6 +50,18 @@ def cache_key(endpoint: str, params: dict) -> str:
     return hashlib.sha1(canonical.encode("utf-8")).hexdigest()[:20]
 
 
+def read_cached(body_path: Path, meta_path: Path):
+    """(response_text, url) from a cache entry, or None if either file is damaged.
+    A shutdown or sleep in the middle of a write can leave an empty or zero-filled file behind,
+    because the rename reached the disk before the data did."""
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        with gzip.open(body_path, "rt", encoding="utf-8") as f:
+            return f.read(), meta["url"]
+    except (OSError, EOFError, ValueError, KeyError, TypeError):
+        return None
+
+
 class NBAClient:
     def __init__(self, cfg: dict, session=None, sleep=time.sleep, clock=time.monotonic):
         h = cfg["http"]
@@ -120,11 +132,13 @@ class NBAClient:
         meta_path = body_path.with_name(f"{key}.meta.json")
 
         if not refresh and body_path.exists() and meta_path.exists() and self._fresh(body_path, max_age_hours):
-            self.cache_hits += 1
-            self._emit("cached", endpoint=endpoint)
-            meta = json.loads(meta_path.read_text(encoding="utf-8"))
-            with gzip.open(body_path, "rt", encoding="utf-8") as f:
-                return f.read(), meta["url"]
+            cached = read_cached(body_path, meta_path)
+            if cached:
+                self.cache_hits += 1
+                self._emit("cached", endpoint=endpoint)
+                return cached
+            log.warning("Cached %s %s was unreadable (cut off mid-write?); downloading it again.", endpoint, key)
+            self.forget(endpoint, params)
 
         text, url = self._fetch_with_retries(endpoint, params)
         self._write_cache(body_path, meta_path, endpoint, params, text, url)
@@ -252,12 +266,19 @@ class NBAClient:
             "fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "bytes": len(text.encode("utf-8")),
         }
-        # Write to a temp file then rename: if the process is killed mid-write we never
-        # leave a half-written file that looks like a valid cache entry.
+        # Write to a temp file, force it onto the disk, then rename: if the process is killed or the
+        # computer shuts down mid-write we never leave a half-written file that looks like a valid
+        # cache entry. (Without the fsync, a power-off can keep the rename but lose the data.)
         tmp_body = body_path.with_name(body_path.name + ".tmp")
-        with gzip.open(tmp_body, "wt", encoding="utf-8") as f:
-            f.write(text)
+        with open(tmp_body, "wb") as raw:
+            with gzip.GzipFile(fileobj=raw, mode="wb") as gz:
+                gz.write(text.encode("utf-8"))
+            raw.flush()
+            os.fsync(raw.fileno())
         os.replace(tmp_body, body_path)
         tmp_meta = meta_path.with_name(meta_path.name + ".tmp")
-        tmp_meta.write_text(json.dumps(meta, indent=2, default=str), encoding="utf-8")
+        with open(tmp_meta, "w", encoding="utf-8") as f:
+            f.write(json.dumps(meta, indent=2, default=str))
+            f.flush()
+            os.fsync(f.fileno())
         os.replace(tmp_meta, meta_path)

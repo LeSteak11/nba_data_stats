@@ -72,9 +72,14 @@ def load_endpoint(con, folder: Path, endpoint: str, is_v3: bool):
         body_path = folder / f"{key}.json.gz"
         if not body_path.exists():
             continue  # incomplete write from a killed run; will be re-downloaded next pull
-        meta = json.loads(meta_path.read_text(encoding="utf-8"))
-        with gzip.open(body_path, "rt", encoding="utf-8") as f:
-            resp = NBAStatsResponse(response=f.read(), status_code=200, url=meta["url"])
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            with gzip.open(body_path, "rt", encoding="utf-8") as f:
+                resp = NBAStatsResponse(response=f.read(), status_code=200, url=meta["url"])
+        except (OSError, EOFError, ValueError, KeyError):
+            # damaged by a shutdown mid-write; the next pull downloads it again
+            log.warning("Skipping damaged cache entry %s/%s", endpoint, key)
+            continue
         datasets = resp.get_data_sets(endpoint if is_v3 else None)
         if is_v3:
             datasets = {**datasets, "GameHeader": _v3_header(resp.get_dict())}

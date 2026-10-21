@@ -183,9 +183,14 @@ def season_progress(cfg) -> dict:
     from ..config import all_seasons
     cache = cfg["paths"]["cache_dir"]
 
+    def game_id(meta_path):
+        try:
+            return json.loads(meta_path.read_text(encoding="utf-8"))["params"].get("GameID")
+        except (OSError, ValueError, KeyError):
+            return None  # damaged by a shutdown mid-write: counts as not downloaded
+
     def game_ids(endpoint):
-        return {json.loads(m.read_text(encoding="utf-8"))["params"].get("GameID")
-                for m in (cache / endpoint).glob("*.meta.json")}
+        return {game_id(m) for m in (cache / endpoint).glob("*.meta.json")} - {None}
 
     done_sets = [game_ids(e) for e in PER_GAME_FOLDERS]
     done = set.intersection(*done_sets) if done_sets else set()
