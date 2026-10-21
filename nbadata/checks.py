@@ -6,11 +6,17 @@ offending row is written to data/dq/<check>.csv so you can look at exactly what'
 
 severity:  error = the data is wrong or missing; don't trust analysis that touches it
            warn  = worth knowing about, often a known quirk of NBA.com's data
+
+Rows listed in known_gaps.toml are NBA.com's own gaps: they don't fail a check, but are still
+counted (meta.dq_results.n_known) and written to data/dq/<check>.known.csv.
 """
 
+import tomllib
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+
+KNOWN_GAPS_PATH = Path(__file__).parent / "known_gaps.toml"
 
 STAT_COLS = ["pts", "fgm", "fga", "fg3m", "fg3a", "ftm", "fta", "oreb", "dreb", "reb", "ast", "stl", "blk", "tov", "pf"]
 
@@ -214,36 +220,72 @@ CHECKS = [
 ]
 
 
-def run_checks(con, out_dir: Path) -> int:
-    """Run every check, store results in meta.*, write offending rows to CSV. Returns # failed errors."""
+def load_known_gaps(path: Path = KNOWN_GAPS_PATH) -> list[dict]:
+    if not path.exists():
+        return []
+    with open(path, "rb") as f:
+        return tomllib.load(f).get("gap", [])
+
+
+def _split_known(df, gaps: list[dict]):
+    """(unexpected rows, known rows, gaps that matched nothing). A gap matches a row only if every
+    column it names has exactly that value (compared as text, so 7 == 7.0 is NOT assumed)."""
+    if df.empty or not gaps:
+        return df, df.iloc[0:0], gaps
+    known = df.index == -1  # all False
+    unused = []
+    for gap in gaps:
+        hit = df.index != -1  # all True
+        for col, value in gap["row"].items():
+            hit &= df[col].astype(str).eq(str(value)).to_numpy() if col in df.columns else False
+        if hit.any():
+            known |= hit
+        else:
+            unused.append(gap)
+    return df[~known], df[known], unused
+
+
+def run_checks(con, out_dir: Path, known_gaps: list[dict] | None = None) -> int:
+    """Run every check, store results in meta.*, write offending rows to CSV. Returns # failed errors.
+
+    known_gaps: offending rows that are NBA.com's own data gaps (see known_gaps.toml). They don't fail
+    the check but are still counted and written to <check>.known.csv. None = load known_gaps.toml."""
+    gaps = load_known_gaps() if known_gaps is None else known_gaps
     con.execute("CREATE SCHEMA IF NOT EXISTS meta")
     con.execute("""CREATE OR REPLACE TABLE meta.dq_results (
         check_name VARCHAR, severity VARCHAR, description VARCHAR, passed BOOLEAN,
-        n_offending BIGINT, sample_json VARCHAR, ran_at TIMESTAMP)""")
+        n_offending BIGINT, n_known BIGINT, sample_json VARCHAR, ran_at TIMESTAMP)""")
     out_dir.mkdir(parents=True, exist_ok=True)
     for old in out_dir.glob("*.csv"):
         old.unlink()
 
     ran_at = datetime.now(timezone.utc).replace(tzinfo=None)
     failed_errors = 0
+    stale = []
     print(f"\n{'CHECK':<36} {'RESULT':<8} OFFENDING ROWS")
     for c in CHECKS:
-        rel = con.sql(c.sql)
-        df = rel.df()
+        df, known, unused = _split_known(con.sql(c.sql).df(), [g for g in gaps if g["check"] == c.name])
+        stale += unused
         n = len(df)
         passed = n == 0
         if not passed:
             df.to_csv(out_dir / f"{c.name}.csv", index=False)
             if c.severity == "error":
                 failed_errors += 1
+        if len(known):
+            known.to_csv(out_dir / f"{c.name}.known.csv", index=False)
         sample = df.head(20).to_json(orient="records", date_format="iso") if n else "[]"
-        con.execute("INSERT INTO meta.dq_results VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    [c.name, c.severity, c.description, passed, n, sample, ran_at])
+        con.execute("INSERT INTO meta.dq_results VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    [c.name, c.severity, c.description, passed, n, len(known), sample, ran_at])
         label = "PASS" if passed else ("FAIL" if c.severity == "error" else "WARN")
-        print(f"{c.name:<36} {label:<8} {'' if passed else n}")
+        extra = f"  (+{len(known)} known NBA.com gap{'s' if len(known) > 1 else ''})" if len(known) else ""
+        print(f"{c.name:<36} {label:<8} {'' if passed else n}{extra}")
 
     if failed_errors:
         print(f"\n{failed_errors} error-level check(s) FAILED.")
-    print(f"Every offending row of every non-passing check is in {out_dir}")
+    for g in stale:
+        print(f"Note: known gap for {g['check']} {g['row']} no longer appears. "
+              f"If its season is in this database, the entry in known_gaps.toml can be removed.")
+    print(f"Every offending row of every non-passing check is in {out_dir} (known gaps: *.known.csv)")
     return failed_errors
 

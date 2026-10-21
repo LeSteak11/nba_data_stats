@@ -91,7 +91,11 @@ If a run stops or dies for any reason, just run the same command again. It picks
 
 Every build ends with a table of checks: PASS / FAIL (data is wrong or missing) / WARN (a known quirk worth knowing).
 Each non-passing check writes **every** offending row to `data/dq/<check_name>.csv`, and results are stored
-in the database in `meta.dq_results`. Highlights:
+in the database in `meta.dq_results`.
+
+Some failures are gaps in NBA.com's own data (e.g. a game it has no matchup data for). Those exact rows are
+listed, with the reason, in `nbadata/known_gaps.toml`: they no longer fail the check, but the check still
+shows `(+N known NBA.com gaps)` and writes them to `data/dq/<check>.known.csv`. Highlights:
 
 - sum of player stats = team box score; team box score = NBA.com's official game log line
 - final score in play-by-play = official score; made shots / 3s / free throws counted from play-by-play = box score

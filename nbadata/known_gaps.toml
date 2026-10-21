@@ -1,0 +1,32 @@
+# Offending check rows that are gaps in NBA.com's own data, not bugs in this pipeline.
+#
+# A row listed here no longer fails its check, but it is still reported: the check prints how many
+# known rows it saw, they're written to data/dq/<check>.known.csv, and meta.dq_results.n_known counts them.
+# An entry matches only when EVERY column given in `row` has exactly that value, so if NBA.com
+# changes the data (fixes it, or it gets worse) the row shows up as a normal failure again.
+# If a listed gap stops appearing at all, the check run says so: the entry can then be deleted.
+#
+# Before adding an entry: re-run the pull for that season (it retries what failed) and confirm
+# NBA.com still answers the same way.
+
+# ---------- 2023-24 ----------
+
+[[gap]]
+check = "game_completeness"
+row = { game_id = "0022300383", missing_traditional = false, missing_advanced = false, missing_pbp = false, missing_matchups = true }
+why = "BoxScoreMatchupsV3 answers with an empty team shell (teamId 0, no players). Seen 2026-10-20."
+
+[[gap]]
+check = "game_completeness"
+row = { game_id = "0022301230", missing_traditional = false, missing_advanced = false, missing_pbp = false, missing_matchups = true }
+why = "BoxScoreMatchupsV3 answers with an empty team shell (teamId 0, no players). Seen 2026-10-20."
+
+[[gap]]
+check = "shots_equal_box"
+row = { game_id = "0022300465", player_id = 202684, fga = 7, shots_fga = 6, fgm = 3, shots_fgm = 3, fg3a = 0, shots_fg3a = 0 }
+why = "Tristan Thompson: shot chart has one missed attempt fewer than the box score. Seen 2026-10-20."
+
+[[gap]]
+check = "shots_equal_box"
+row = { game_id = "0022300078", player_id = 1628991, fga = 13, shots_fga = 12, fgm = 9, shots_fgm = 9, fg3a = 2, shots_fg3a = 2 }
+why = "Jaren Jackson Jr.: shot chart has one missed attempt fewer than the box score. Seen 2026-10-20."
