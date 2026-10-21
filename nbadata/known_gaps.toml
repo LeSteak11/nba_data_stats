@@ -30,3 +30,78 @@ why = "Tristan Thompson: shot chart has one missed attempt fewer than the box sc
 check = "shots_equal_box"
 row = { game_id = "0022300078", player_id = 1628991, fga = 13, shots_fga = 12, fgm = 9, shots_fgm = 9, fg3a = 2, shots_fg3a = 2 }
 why = "Jaren Jackson Jr.: shot chart has one missed attempt fewer than the box score. Seen 2026-10-20."
+
+# ---------- 2022-23 ----------
+
+[[gap]]
+check = "shots_equal_box"
+row = { game_id = "0022200271", player_id = 202694, fga = 15, shots_fga = 15, fgm = 6, shots_fgm = 6, fg3a = 6, shots_fg3a = 5 }
+why = "Marcus Morris Sr.: shot chart logs one of his 3-point attempts as a 2. Box score and play-by-play agree. Seen 2026-10-21."
+
+[[gap]]
+check = "shots_equal_box"
+row = { game_id = "0022200271", player_id = 202322, fga = 7, shots_fga = 8, fgm = 2, shots_fgm = 2, fg3a = 3, shots_fg3a = 3 }
+why = "John Wall: shot chart has a missed shot (event 520) that play-by-play doesn't (it shows a Wall rebound, then a turnover). Seen 2026-10-21."
+
+[[gap]]
+check = "shots_link_to_pbp"
+row = { game_id = "0022200271", game_event_id = 520 }
+why = "The same phantom John Wall shot: no play-by-play shot event 520. Seen 2026-10-21."
+
+# OKC 2022-23 on/off data (TeamPlayerOnOffDetails) is missing game 0022200443 (2022-12-17): exactly the 11
+# players who played that game are short, by 240 minutes in total (one 48-minute game x 5 players).
+
+[[gap]]
+check = "on_off_on_minutes_equal_box"
+row = { season = "2022-23", season_type = "Regular Season", team_id = 1610612760, player_id = 1629026, on_min = 1174.048333 }
+why = "Williams, Kenrich: OKC on/off data is missing game 0022200443. Seen 2026-10-21."
+
+[[gap]]
+check = "on_off_on_minutes_equal_box"
+row = { season = "2022-23", season_type = "Regular Season", team_id = 1610612760, player_id = 1630647, on_min = 256.256667 }
+why = "Omoruyi, Eugene: OKC on/off data is missing game 0022200443. Seen 2026-10-21."
+
+[[gap]]
+check = "on_off_on_minutes_equal_box"
+row = { season = "2022-23", season_type = "Regular Season", team_id = 1610612760, player_id = 1630198, on_min = 1368.953333 }
+why = "Joe, Isaiah: OKC on/off data is missing game 0022200443. Seen 2026-10-21."
+
+[[gap]]
+check = "on_off_on_minutes_equal_box"
+row = { season = "2022-23", season_type = "Regular Season", team_id = 1610612760, player_id = 1631119, on_min = 899.141667 }
+why = "Williams, Jaylin: OKC on/off data is missing game 0022200443. Seen 2026-10-21."
+
+[[gap]]
+check = "on_off_on_minutes_equal_box"
+row = { season = "2022-23", season_type = "Regular Season", team_id = 1610612760, player_id = 203488, on_min = 611.158333 }
+why = "Muscala, Mike: OKC on/off data is missing game 0022200443. Seen 2026-10-21."
+
+[[gap]]
+check = "on_off_on_minutes_equal_box"
+row = { season = "2022-23", season_type = "Regular Season", team_id = 1610612760, player_id = 1630598, on_min = 1276.213333 }
+why = "Wiggins, Aaron: OKC on/off data is missing game 0022200443. Seen 2026-10-21."
+
+[[gap]]
+check = "on_off_on_minutes_equal_box"
+row = { season = "2022-23", season_type = "Regular Season", team_id = 1610612760, player_id = 1630322, on_min = 513.258333 }
+why = "Waters III, Lindy: OKC on/off data is missing game 0022200443. Seen 2026-10-21."
+
+[[gap]]
+check = "on_off_on_minutes_equal_box"
+row = { season = "2022-23", season_type = "Regular Season", team_id = 1610612760, player_id = 1630197, on_min = 679.215 }
+why = "Pokusevski, Aleksej: OKC on/off data is missing game 0022200443. Seen 2026-10-21."
+
+[[gap]]
+check = "on_off_on_minutes_equal_box"
+row = { season = "2022-23", season_type = "Regular Season", team_id = 1610612760, player_id = 1630544, on_min = 1164.988333 }
+why = "Mann, Tre: OKC on/off data is missing game 0022200443. Seen 2026-10-21."
+
+[[gap]]
+check = "on_off_on_minutes_equal_box"
+row = { season = "2022-23", season_type = "Regular Season", team_id = 1610612760, player_id = 1631114, on_min = 2245.991667 }
+why = "Williams, Jalen: OKC on/off data is missing game 0022200443. Seen 2026-10-21."
+
+[[gap]]
+check = "on_off_on_minutes_equal_box"
+row = { season = "2022-23", season_type = "Regular Season", team_id = 1610612760, player_id = 1629652, on_min = 2241.54 }
+why = "Dort, Luguentz: OKC on/off data is missing game 0022200443. Seen 2026-10-21."
