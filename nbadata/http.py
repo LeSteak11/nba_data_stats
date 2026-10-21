@@ -160,6 +160,9 @@ class NBAClient:
         self._wait_for_turn()
         # Same param handling as nba_api: sorted by key (NBA.com cares), None values dropped.
         sorted_params = sorted(params.items(), key=lambda kv: kv[0])
+        # The gap is measured start-to-start, so the time NBA.com takes to answer counts toward
+        # the wait instead of being added on top of it (~35 -> ~46 requests/min, same gap setting).
+        self._last_request_at = self.clock()
         try:
             resp = self.session.get(
                 BASE_URL.format(endpoint=endpoint),
@@ -168,7 +171,6 @@ class NBAClient:
                 timeout=self.timeout,
             )
         finally:
-            self._last_request_at = self.clock()
             self.live_requests += 1
             self.requests_on_connection += 1
         return resp

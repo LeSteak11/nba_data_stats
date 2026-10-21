@@ -119,6 +119,23 @@ def test_rate_limit_waits_between_live_requests(cfg):
     assert sleeps == [1.0]  # clock is frozen at 0, so the full 1.0s gap is enforced
 
 
+def test_response_time_counts_toward_the_gap(cfg):
+    """Gap is start-to-start: a 0.4 s answer leaves only 0.6 s to wait for a 1.0 s gap."""
+    now = [0.0]
+
+    class SlowSession(FakeSession):
+        def get(self, *args, **kwargs):
+            now[0] += 0.4
+            return super().get(*args, **kwargs)
+
+    sleeps = []
+    client = NBAClient(cfg, session=SlowSession(FakeResponse(), FakeResponse()), sleep=sleeps.append,
+                       clock=lambda: now[0])
+    client.call(LeagueGameLog, season="2024-25")
+    client.call(LeagueGameLog, season="2023-24")
+    assert sleeps == [pytest.approx(0.6)]
+
+
 def test_max_age_forces_refetch(cfg):
     session = FakeSession(FakeResponse(), FakeResponse())
     client, _ = make_client(cfg, session)

@@ -107,7 +107,7 @@ Every request goes through `nbadata/http.py`:
 - **Cache first.** Every response is saved gzipped under `data/cache/<endpoint>/`, exactly as received. That
   folder *is* the raw layer. A request that's already cached is never sent again. So if a long pull
   dies halfway, re-running it continues from where it stopped.
-- **Rate limit.** At least 1.0–1.6 s between live requests, plus a 30 s break and a fresh connection every 450 requests.
+- **Rate limit.** At least 1.0–1.6 s from the start of one live request to the start of the next, plus a 30 s break and a fresh connection every 450 requests.
 - **Retries.** Timeouts, connection errors, 429/5xx and junk bodies get retried with backoff (5, 10, 20, 40, 80 s).
   A timeout (15 s) means the connection is probably blocked, so the retry goes out on a fresh connection.
 - **Stops if blocked.** After 3 requests in a row fail completely, the run stops and tells you to wait.
