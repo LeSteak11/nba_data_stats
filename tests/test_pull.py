@@ -45,7 +45,7 @@ class FakeNBA:
 def test_pull_then_build(tmp_path):
     cfg = {
         "paths": {"data_dir": tmp_path, "cache_dir": tmp_path / "cache", "log_dir": tmp_path / "logs"},
-        "seasons": {"current": "2026-27", "season_types": ["Regular Season", "PlayIn", "Playoffs"]},
+        "seasons": {"completed": ["2024-25"], "current": "2026-27", "season_types": ["Regular Season", "PlayIn", "Playoffs"]},
         "http": {"min_interval_seconds": 0, "jitter_seconds": 0, "timeout_seconds": 5, "max_retries": 0,
                  "backoff_base_seconds": 0, "pause_every": 0, "pause_seconds": 0, "max_consecutive_failures": 3},
     }

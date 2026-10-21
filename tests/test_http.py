@@ -38,6 +38,9 @@ class FakeSession:
             raise item
         return item
 
+    def close(self):
+        pass
+
 
 @pytest.fixture
 def cfg(tmp_path):
@@ -122,6 +125,20 @@ def test_max_age_forces_refetch(cfg):
     client.call(LeagueGameLog, season="2024-25")
     client.call(LeagueGameLog, season="2024-25", max_age_hours=-1)  # anything is "too old"
     assert len(session.calls) == 2
+
+
+def test_timeout_retries_on_a_fresh_connection(cfg, monkeypatch):
+    """A blocked connection hangs until timeout; the retry must not go out on that same connection."""
+    sessions = [FakeSession(requests.Timeout()), FakeSession(FakeResponse())]
+    monkeypatch.setattr(requests, "Session", lambda: sessions.pop(0))
+    events = []
+    client = NBAClient(cfg, sleep=lambda s: None, clock=lambda: 0.0)
+    client.on_event = lambda kind, **info: events.append(kind)
+    first = client.session
+    client.call(LeagueGameLog, season="2024-25")
+    assert client.session is not first and len(first.calls) == 1 and len(client.session.calls) == 1
+    assert events == ["reconnect", "retry", "live"]
+    assert client.retries == 1
 
 
 def test_pause_opens_a_fresh_connection(cfg):

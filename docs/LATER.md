@@ -17,3 +17,10 @@ Ideas that are deliberately **not** in v1. Add to this list instead of growing v
 - Seasons before 2021-22
 - Officials, arenas, attendance (`BoxScoreSummaryV3`)
 - Hustle, misc, scoring and usage box scores
+
+## Tried and rejected
+- **Advanced box score from season-wide `PlayerGameLogs`/`TeamGameLogs` (Advanced)** instead of one
+  `BoxScoreAdvancedV3` call per game (would save ~1,300 requests a season). Checked against 2024-25
+  on 2026-10-20: ratings, usage, TS%, eFG%, possessions match exactly, but every estimated column
+  (E_OFF_RATING, E_PACE, E_USG_PCT, ...) is different, the team TM_TOV_PCT is a different stat, and a
+  few hundred player rows differ on rebound %, pace and PIE. Kept the per-game calls.

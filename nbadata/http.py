@@ -70,7 +70,12 @@ class NBAClient:
         self._last_request_at = None
         self.live_requests = 0
         self.cache_hits = 0
+        self.retries = 0
+        self.requests_on_connection = 0
         self._consecutive_failures = 0
+        # Optional progress hook: on_event(kind, **info). Kinds: "live", "cached", "retry", "pause",
+        # "reconnect". Keeps all display code out of this module (see nbadata/ui.py).
+        self.on_event = None
 
     # ---------- public API ----------
 
@@ -109,6 +114,7 @@ class NBAClient:
 
         if not refresh and body_path.exists() and meta_path.exists() and self._fresh(body_path, max_age_hours):
             self.cache_hits += 1
+            self._emit("cached", endpoint=endpoint)
             meta = json.loads(meta_path.read_text(encoding="utf-8"))
             with gzip.open(body_path, "rt", encoding="utf-8") as f:
                 return f.read(), meta["url"]
@@ -126,14 +132,24 @@ class NBAClient:
         age_hours = (time.time() - path.stat().st_mtime) / 3600
         return age_hours <= max_age_hours
 
+    def _emit(self, kind: str, **info):
+        if self.on_event:
+            self.on_event(kind, **info)
+
+    def _reconnect(self, why: str):
+        # NBA.com seems to block a long-lived connection, not the machine: start a fresh one.
+        self.requests_on_connection = 0
+        if self._own_session:
+            self.session.close()
+            self.session = requests.Session()
+        self._emit("reconnect", why=why)
+
     def _wait_for_turn(self):
         if self.live_requests and self.pause_every and self.live_requests % self.pause_every == 0:
             log.info("Pausing %ss after %s live requests, then reconnecting.", self.pause_seconds, self.live_requests)
+            self._emit("pause", seconds=self.pause_seconds, after=self.live_requests)
             self.sleep(self.pause_seconds)
-            # NBA.com seems to block a long-lived connection, not the machine: start a fresh one.
-            if self._own_session:
-                self.session.close()
-                self.session = requests.Session()
+            self._reconnect("scheduled pause")
         if self._last_request_at is not None:
             gap = self.min_interval + random.uniform(0, self.jitter)
             elapsed = self.clock() - self._last_request_at
@@ -154,20 +170,27 @@ class NBAClient:
         finally:
             self._last_request_at = self.clock()
             self.live_requests += 1
+            self.requests_on_connection += 1
         return resp
 
     def _fetch_with_retries(self, endpoint: str, params: dict):
         last_problem = None
         for attempt in range(self.max_retries + 1):
             if attempt:
+                self.retries += 1
                 wait = self.backoff_base * 2 ** (attempt - 1) + random.uniform(0, 1)
                 log.warning("Retry %s/%s for %s in %.0fs (%s)", attempt, self.max_retries, endpoint, wait, last_problem)
+                self._emit("retry", endpoint=endpoint, attempt=attempt, of=self.max_retries,
+                           seconds=wait, problem=last_problem)
                 self.sleep(wait)
             try:
                 resp = self._fetch_once(endpoint, params)
             except (requests.Timeout, requests.ConnectionError) as e:
                 # NBA.com usually "blocks" by hanging until timeout, so this is the common failure.
+                # Retrying on the same connection just hangs again (observed: hours of timeouts in a
+                # row), so the retry goes out on a fresh one.
                 last_problem = f"{type(e).__name__}"
+                self._reconnect(last_problem)
                 continue
 
             if resp.status_code in RETRYABLE_STATUS:
@@ -184,6 +207,7 @@ class NBAClient:
                 continue
 
             self._consecutive_failures = 0
+            self._emit("live", endpoint=endpoint)
             return resp.text, resp.url
 
         self._record_failure()

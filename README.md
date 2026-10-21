@@ -3,7 +3,7 @@
 Local NBA research database: NBA.com stats → DuckDB, in three layers (raw → clean → analysis).
 Seasons 2021-22 through the current 2026-27 season, regular season + play-in + playoffs.
 
-> **Status: Stage 2 of 4.** Pull → raw → clean → data checks work for any season. Being proven on 2024-25 first.
+> **Status: Stage 2 of 4.** Pull → raw → clean → data checks work for any season. 2024-25 is built with every check passing.
 > Still to come: analysis views, data dictionary, export (Stage 3), `update` command (Stage 4).
 > Sections marked *(coming)* don't work yet.
 
@@ -67,10 +67,20 @@ From here on, the commands are the same on both systems (with the venv active, `
 
 | What | Requests | Time |
 |---|---|---|
-| One full season, first time | ~5,500 | ~2 hours |
-| All 6 seasons, first time | ~30,000 | ~10–12 hours (run overnight) |
+| One full season, first time | ~5,500 | ~2.5 hours of downloading (~36 requests/min) if NBA.com doesn't block you |
 | Same thing again (all cached) | 0 | seconds |
 | `build-db` (rebuild database from cache) | 0 | a few minutes |
+
+2024-25 took ~21 hours start to finish: ~2.5 h of downloading, the rest stuck on blocked connections and
+restarts. Two fixes since then (a fresh connection every 450 requests, and right after any timeout) should
+keep a season close to the 2.5 h.
+
+**Pull one season per run**, in this order: 2023-24, 2022-23, 2021-22, 2025-26, then the current 2026-27.
+(`--all` still works, but one season at a time keeps each run short and easy to check.)
+
+While a pull runs in a terminal you get a live dashboard: a progress bar per step with an ETA, requests per
+minute, retries and failures, a countdown during breaks and retry waits, and the latest events. At the end
+it prints a summary and how far along every season is. **Ctrl+C stops safely**; run the same command to continue.
 
 **Long pulls: keep the computer awake.** If it sleeps, the internet drops, requests start failing, and the run stops itself.
 On a Mac, put `caffeinate -i` in front: `caffeinate -i python -m nbadata build --season 2024-25`.
@@ -97,8 +107,9 @@ Every request goes through `nbadata/http.py`:
 - **Cache first.** Every response is saved gzipped under `data/cache/<endpoint>/`, exactly as received. That
   folder *is* the raw layer. A request that's already cached is never sent again. So if a long pull
   dies halfway, re-running it continues from where it stopped.
-- **Rate limit.** At least 1.0–1.6 s between live requests, plus a 45 s break every 400 requests.
+- **Rate limit.** At least 1.0–1.6 s between live requests, plus a 30 s break and a fresh connection every 450 requests.
 - **Retries.** Timeouts, connection errors, 429/5xx and junk bodies get retried with backoff (5, 10, 20, 40, 80 s).
+  A timeout (15 s) means the connection is probably blocked, so the retry goes out on a fresh connection.
 - **Stops if blocked.** After 3 requests in a row fail completely, the run stops and tells you to wait.
   Hammering NBA.com while it's throttling you gets you blocked for longer.
 
@@ -127,6 +138,7 @@ Tables available: `clean.games`, `clean.teams`, `clean.players`, `clean.player_b
 ```
 nbadata/          Python package
   http.py         the only code that talks to NBA.com (cache, rate limit, retries)
+  ui.py           the live dashboard shown during a pull
   pull/           what to download for a season
   raw_load.py     cache -> raw.* tables (all text, exactly as received)
   clean/          one SQL file per clean.* table, run in number order

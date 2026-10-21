@@ -10,7 +10,8 @@ season_types = ["Regular Season", "PlayIn", "Playoffs"]
 # Be polite to NBA.com. Faster = higher chance of getting blocked.
 min_interval_seconds = 1.0    # minimum gap between live requests
 jitter_seconds = 0.6          # plus a random 0..jitter on top
-timeout_seconds = 45
+timeout_seconds = 15         # a normal answer takes 1-2 s; a blocked connection just hangs, so give up sooner
+                              # (a timeout also opens a fresh connection before the retry)
 max_retries = 5               # per request, with exponential backoff
 backoff_base_seconds = 5      # waits 5, 10, 20, 40, 80 s
 # Observed 2026-10-20: one connection got blocked after ~570 requests (twice), even with a 45 s

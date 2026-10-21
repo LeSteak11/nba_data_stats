@@ -47,7 +47,7 @@ def cmd_build_db(cfg, args):
 
 def cmd_build(cfg, args):
     code = cmd_pull(cfg, args)
-    if code == 2:  # stopped because NBA.com is blocking; don't build on top of that
+    if code in (2, 130):  # stopped (NBA.com blocking us, or Ctrl+C): don't build on top of that
         return code
     if code == 1:
         print("\nSome requests failed (see above). Building anyway: the checks will show what's missing.\n")
@@ -66,35 +66,8 @@ def cmd_query(cfg, args):
 
 def cmd_progress(cfg, args):
     """How many games are fully downloaded, per season. Reads only the cache, safe during a run."""
-    import gzip
-    import json
-    cache = cfg["paths"]["cache_dir"]
-
-    def game_ids(endpoint):
-        return {json.loads(m.read_text(encoding="utf-8"))["params"].get("GameID")
-                for m in (cache / endpoint).glob("*.meta.json")}
-
-    per_game = ["boxscoretraditionalv3", "boxscoreadvancedv3", "playbyplayv3", "boxscorematchupsv3"]
-    done_sets = [game_ids(e) for e in per_game]
-    done = set.intersection(*done_sets) if done_sets else set()
-
-    season_games = {}
-    for meta in (cache / "leaguegamelog").glob("*.meta.json"):
-        season = json.loads(meta.read_text(encoding="utf-8"))["params"]["Season"]
-        with gzip.open(meta.with_name(meta.name.replace(".meta.json", ".json.gz")), "rt", encoding="utf-8") as f:
-            rs = json.load(f)["resultSets"][0]
-        i = rs["headers"].index("GAME_ID")
-        season_games.setdefault(season, set()).update(str(r[i]) for r in rs["rowSet"])
-
-    if not season_games:
-        print("No game lists cached yet.")
-        return 0
-    for season, games in sorted(season_games.items()):
-        if not games:
-            continue
-        n = len(games & done)
-        bar = "#" * int(30 * n / len(games))
-        print(f"  {season}  [{bar:<30}] {n:>5}/{len(games)} games  {n / len(games):.0%}")
+    from .pull import print_season_progress
+    print_season_progress(cfg)
     return 0
 
 
@@ -114,7 +87,15 @@ def cmd_cache_info(cfg, args):
     return 0
 
 
+def _utf8_when_redirected():
+    """Box-drawing characters in tables crash a cp1252 pipe/file on Windows. A real terminal is fine."""
+    for stream in (sys.stdout, sys.stderr):
+        if not stream.isatty() and hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
+
+
 def main(argv=None):
+    _utf8_when_redirected()
     parser = argparse.ArgumentParser(prog="nbadata", description="NBA data foundation")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("smoke", help="Stage 0: test every NBA.com endpoint we depend on")
