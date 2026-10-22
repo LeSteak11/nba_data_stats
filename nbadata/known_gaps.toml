@@ -127,3 +127,15 @@ why = "Matchups list Malcolm Hill guarding Heat players (29 s in total), but he 
 check = "matchup_players_in_game"
 row = { game_id = "0022101164", off_player_id = 1630209, def_player_id = 1630792 }
 why = "Matchups list Malcolm Hill guarding Heat players (29 s in total), but he isn't in this game's box score or play-by-play. Seen 2026-10-21."
+
+# ---------- 2025-26 ----------
+
+[[gap]]
+check = "shots_equal_box"
+row = { game_id = "0022500792", player_id = 1631095, fga = 8, shots_fga = 9, fgm = 6, shots_fgm = 6, fg3a = 3, shots_fg3a = 3 }
+why = "Jabari Smith Jr.: shot chart has a missed shot (event 403) that play-by-play doesn't (it shows a Durant rebound, then substitutions). Seen 2026-10-21."
+
+[[gap]]
+check = "shots_link_to_pbp"
+row = { game_id = "0022500792", game_event_id = 403 }
+why = "The same phantom Jabari Smith Jr. shot: no play-by-play shot event 403. Seen 2026-10-21."
