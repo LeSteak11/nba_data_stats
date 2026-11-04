@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% if refresh %}<meta http-equiv="refresh" content="{{ refresh }}">{% endif %}
+  <title>{% block title %}NBA Hub{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap topbar-inner">
+    <a class="brand" href="{{ url_for('home') }}">NBA Hub</a>
+    <nav>
+      <a href="{{ url_for('home') }}" {% if request.endpoint == 'home' %}class="on"{% endif %}>Hub</a>
+      <a href="{{ url_for('search') }}" {% if request.endpoint in ('search', 'player', 'gamelog') %}class="on"{% endif %}>Players</a>
+      <a href="{{ url_for('teams') }}" {% if request.endpoint == 'teams' %}class="on"{% endif %}>Teams</a>
+      <a href="{{ url_for('leaders') }}" {% if request.endpoint == 'leaders' %}class="on"{% endif %}>Leaders</a>
+    </nav>
+    <form class="search" action="{{ url_for('search') }}" method="get" autocomplete="off">
+      <input type="search" name="q" placeholder="Search players" aria-label="Search players" data-suggest>
+      <div class="suggest" hidden></div>
+    </form>
+  </div>
+</header>
+
+<main class="wrap">
+{% block content %}{% endblock %}
+</main>
+
+<footer class="wrap footer">
+  {% if footer and footer.n %}
+    Seasons in the database: {{ footer.first }} – {{ footer.last }} ({{ footer.n }})
+    · built {{ footer.built_at | utc_local }}
+  {% elif footer %}
+    No seasons in the database yet.
+  {% endif %}
+</footer>
+<script src="{{ url_for('static', filename='search.js') }}"></script>
+</body>
+</html>

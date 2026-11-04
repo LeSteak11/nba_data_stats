@@ -1,0 +1,25 @@
+{# Shared header for the player page and the game log. Needs: bio #}
+<section class="profile">
+  <img class="headshot" src="{{ url_for('player_image', player_id=bio.player_id) }}" alt="{{ bio.player_name }}">
+  <div>
+    <h1>{{ bio.player_name }}</h1>
+    <p class="facts">
+      {% set h = bio.height_inches | height %}
+      {% for part in [bio.position, h, (bio.weight_lbs ~ ' lb') if bio.weight_lbs] if part %}
+        <span>{{ part }}</span>
+      {% endfor %}
+    </p>
+    <dl class="bio">
+      {% if bio.from_year %}<dt>NBA</dt><dd>{{ bio.from_year }}–{{ bio.to_year }}</dd>{% endif %}
+      {% if bio.draft_year %}<dt>Draft</dt><dd>{{ bio.draft_year }}, round {{ bio.draft_round }}, pick {{ bio.draft_number }}</dd>
+      {% elif bio.has_bio %}<dt>Draft</dt><dd>Undrafted</dd>{% endif %}
+      {% if bio.college %}<dt>From</dt><dd>{{ bio.college }}</dd>{% endif %}
+      {% if bio.country %}<dt>Country</dt><dd>{{ bio.country }}</dd>{% endif %}
+      <dt>Player ID</dt><dd><code>{{ bio.player_id }}</code></dd>
+    </dl>
+    <div class="tabs">
+      <a href="{{ url_for('player', player_id=bio.player_id) }}" class="{% if request.endpoint == 'player' %}on{% endif %}">Seasons</a>
+      <a href="{{ url_for('gamelog', player_id=bio.player_id) }}" class="{% if request.endpoint == 'gamelog' %}on{% endif %}">Game log</a>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}{{ bio.player_name }} · NBA Hub{% endblock %}
+{% block content %}
+{% include "player_header.html" %}
+
+{% if not tables %}
+  <p class="notice">No games in the database yet for {{ bio.player_name }}
+    {%- if seasons %} (the database has {{ seasons[-1].season }} to {{ seasons[0].season }}){% endif %}.
+    Their games appear here once those seasons are pulled.</p>
+{% else %}
+  <div class="toolbar">
+    <div class="tabs">
+      <a href="{{ with_args(mode=None) }}" class="{% if mode == 'per_game' %}on{% endif %}">Per game</a>
+      <a href="{{ with_args(mode='totals') }}" class="{% if mode == 'totals' %}on{% endif %}">Totals</a>
+    </div>
+    <span class="muted small">{{ games | int }} games in the database. Shooting % from season totals; TOT = all teams that season.</span>
+  </div>
+
+  {% set pg = '_pg' if mode == 'per_game' else '' %}
+  {% for st, t in tables.items() %}
+    <h2>{{ type_labels[st] }}</h2>
+    <div class="scroll">
+    <table class="stats">
+      <thead><tr>
+        <th>Season</th><th>Team</th><th class="num">GP</th><th class="num">GS</th>
+        <th class="num">MIN</th><th class="num">PTS</th><th class="num">REB</th><th class="num">AST</th>
+        <th class="num">STL</th><th class="num">BLK</th><th class="num">TOV</th>
+        <th class="num">FG%</th><th class="num">3P%</th><th class="num">FT%</th><th class="num" title="True shooting %">TS%</th>
+      </tr></thead>
+      <tbody>
+      {% for r in t.rows + [t.career] %}
+        <tr class="{% if r.is_total %}total{% endif %}{% if loop.last %} career{% endif %}">
+          <td>{% if loop.last %}{{ r.season }}{% else %}<a href="{{ url_for('gamelog', player_id=bio.player_id, season=r.season, type=st) }}">{{ r.season }}</a>{% endif %}</td>
+          <td>{{ r.team }}</td>
+          <td class="num">{{ r.gp | int }}</td><td class="num">{{ r.gs | int }}</td>
+          {% if mode == 'per_game' %}
+            <td class="num">{{ r.min_pg | f1 }}</td>
+            {% for k in ['pts', 'reb', 'ast', 'stl', 'blk', 'tov'] %}<td class="num">{{ r[k ~ pg] | f1 }}</td>{% endfor %}
+          {% else %}
+            <td class="num">{{ r.min | int }}</td>
+            {% for k in ['pts', 'reb', 'ast', 'stl', 'blk', 'tov'] %}<td class="num">{{ r[k] | int }}</td>{% endfor %}
+          {% endif %}
+          <td class="num">{{ r.fg_pct | pct }}</td><td class="num">{{ r.fg3_pct | pct }}</td>
+          <td class="num">{{ r.ft_pct | pct }}</td><td class="num">{{ r.ts_pct | pct }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  {% endfor %}
+{% endif %}
+{% endblock %}

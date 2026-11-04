@@ -1,0 +1,33 @@
+{# A sortable column header. Clicking sorts by `key`; clicking the current column flips the direction.
+   Stats sort high-to-low first, text and dates low-to-high (first_desc=False). #}
+{% macro sort_th(label, key, sort, desc, first_desc=True, title=None) -%}
+  {%- set active = (sort == key) -%}
+  {%- set next_desc = (not desc) if active else first_desc -%}
+  <th class="num sortable{% if active %} sorted{% endif %}"{% if title %} title="{{ title }}"{% endif %}>
+    <a href="{{ with_args(sort=key, dir='desc' if next_desc else 'asc') }}">{{ label }}{% if active %}<span class="arrow">{{ '▼' if desc else '▲' }}</span>{% endif %}</a>
+  </th>
+{%- endmacro %}
+
+{# Season-type tabs. `types` = the season types that exist here; `current` = the selected one. #}
+{% macro type_tabs(types, current, type_labels) -%}
+  <div class="tabs">
+    {% for t in types %}
+      <a href="{{ with_args(type=t, sort=None, dir=None) }}" class="{% if t == current %}on{% endif %}">{{ type_labels[t] }}</a>
+    {% endfor %}
+  </div>
+{%- endmacro %}
+
+{# Season picker that reloads the page on change (button kept for no-JS). #}
+{% macro season_picker(seasons, current) -%}
+  <form class="picker" method="get">
+    {% for k, v in request.args.items() if k not in ('season', 'type', 'sort', 'dir') %}
+      <input type="hidden" name="{{ k }}" value="{{ v }}">
+    {% endfor %}
+    <label>Season
+      <select name="season" onchange="this.form.submit()">
+        {% for s in seasons %}<option value="{{ s }}" {% if s == current %}selected{% endif %}>{{ s }}</option>{% endfor %}
+      </select>
+    </label>
+    <noscript><button>Go</button></noscript>
+  </form>
+{%- endmacro %}

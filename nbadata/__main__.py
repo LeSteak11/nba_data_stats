@@ -99,6 +99,44 @@ def cmd_progress(cfg, args):
     return 0
 
 
+def cmd_hub(cfg, args):
+    """Start the hub (local website) and open it in the browser. Reads the database, never writes it."""
+    import socket
+    import threading
+    import urllib.request
+    import webbrowser
+
+    from .db import db_path
+    from .hub.app import HUB_ID, create_app
+
+    url = f"http://127.0.0.1:{args.port}/"
+    open_browser = (lambda: webbrowser.open(url)) if not args.no_browser else (lambda: None)
+    try:
+        with urllib.request.urlopen(url + "health", timeout=2) as r:
+            if r.read().decode() == HUB_ID:
+                print(f"The hub is already running at {url}")
+                open_browser()
+                return 0
+    except OSError:
+        pass
+    with socket.socket() as s:
+        if s.connect_ex(("127.0.0.1", args.port)) == 0:
+            print(f"Port {args.port} is in use by another program. Try: python -m nbadata hub --port {args.port + 1}")
+            return 1
+
+    images = cfg["paths"]["data_dir"] / "images"
+    for sub in ("players", "teams"):
+        (images / sub).mkdir(parents=True, exist_ok=True)
+    app = create_app(db_path(cfg), images)
+    logging.getLogger("werkzeug").setLevel(logging.WARNING)  # no line per page load in the window or the log
+    print(f"\nNBA Hub running at {url}")
+    print(f"Headshots/logos go in {images}\\players\\<player_id>.png and teams\\<team_id>.png")
+    print("Safe to leave open during a season run. Close this window (or press Ctrl+C) to stop.\n")
+    threading.Timer(1.0, open_browser).start()
+    app.run(host="127.0.0.1", port=args.port, threaded=True)
+    return 0
+
+
 def cmd_cache_info(cfg, args):
     cache = cfg["paths"]["cache_dir"]
     if not cache.exists():
@@ -140,12 +178,16 @@ def main(argv=None):
     q = sub.add_parser("query", help='Run SQL and print the result: query "SELECT ..."')
     q.add_argument("sql")
     q.add_argument("--rows", type=int, default=40, help="max rows to print")
+    h = sub.add_parser("hub", help="Start the hub: a local website for browsing the database")
+    h.add_argument("--port", type=int, default=8050)
+    h.add_argument("--no-browser", action="store_true", help="don't open a browser tab")
     args = parser.parse_args(argv)
 
     cfg = load_config()
     _setup_logging(cfg)
     handlers = {"smoke": cmd_smoke, "cache-info": cmd_cache_info, "pull": cmd_pull, "build": cmd_build,
-                "build-db": cmd_build_db, "next": cmd_next, "check": cmd_check, "query": cmd_query, "progress": cmd_progress}
+                "build-db": cmd_build_db, "next": cmd_next, "check": cmd_check, "query": cmd_query, "progress": cmd_progress,
+                "hub": cmd_hub}
     from .http import BlockedError
     try:
         return handlers[args.command](cfg, args)

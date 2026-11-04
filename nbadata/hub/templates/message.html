@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} · NBA Hub{% endblock %}
+{% block content %}
+<h1>{{ title }}</h1>
+<p class="notice">{{ text }}</p>
+{% if detail %}<p class="muted small"><code>{{ detail }}</code></p>{% endif %}
+{% endblock %}

@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <h1>NBA Hub</h1>
+  <p class="muted">Your local NBA.com stats database. Search a player to start.</p>
+  <form class="search big" action="{{ url_for('search') }}" method="get" autocomplete="off">
+    <input type="search" name="q" placeholder="e.g. Jokic, LeBron, Curry" aria-label="Search players" data-suggest autofocus>
+    <div class="suggest" hidden></div>
+  </form>
+</section>
+
+<div class="grid2">
+  <section class="card">
+    <h2>Seasons in the database</h2>
+    {% if seasons %}
+    <table class="stats">
+      <thead><tr><th>Season</th><th class="num">Regular season</th><th class="num">Play-In</th><th class="num">Playoffs</th></tr></thead>
+      <tbody>
+      {% for s in seasons %}
+        <tr><td>{{ s.season }}</td><td class="num">{{ s.regular | int }}</td>
+            <td class="num">{{ s.playin | int if s.playin else '—' }}</td><td class="num">{{ s.playoffs | int }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted small">Game counts. New seasons appear here by themselves after each season run.</p>
+    {% else %}
+      <p class="muted">No seasons yet.</p>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>Data checks</h2>
+    <p>
+      {% if dq.errors %}<span class="badge bad">{{ dq.errors | length }} failing</span>
+      {% else %}<span class="badge good">All error checks pass</span>{% endif %}
+      {% if dq.warnings %}<span class="badge warn">{{ dq.warnings | length }} warning{{ 's' if dq.warnings | length != 1 }}</span>{% endif %}
+    </p>
+    <p class="muted small">{{ dq.n_checks }} checks, last run {{ dq.built_at | utc_local }}.
+      {% if dq.n_known %}{{ dq.n_known | int }} known NBA.com gaps accepted.{% endif %}
+      Details per check in <code>data/dq/</code>.</p>
+    {% if dq.failing %}
+    <table class="stats">
+      <thead><tr><th>Check</th><th>Severity</th><th class="num">Rows</th></tr></thead>
+      <tbody>
+      {% for f in dq.failing %}
+        <tr><td><code>{{ f.check_name }}</code></td><td>{{ f.severity }}</td><td class="num">{{ f.n_offending | int }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% from "macros.html" import sort_th, type_tabs, season_picker %}
+{% block title %}{{ bio.player_name }} game log · NBA Hub{% endblock %}
+{% block content %}
+{% include "player_header.html" %}
+
+{% if not options %}
+  <p class="notice">No games in the database yet for {{ bio.player_name }}.</p>
+{% else %}
+  <div class="toolbar">
+    {{ season_picker(seasons, season) }}
+    {{ type_tabs(types, stype, type_labels) }}
+  </div>
+
+  <div class="scroll">
+  <table class="stats">
+    <thead><tr>
+      {{ sort_th('Date', 'date', sort, desc, first_desc=False) }}
+      {{ sort_th('Opp', 'opp', sort, desc, first_desc=False) }}
+      {{ sort_th('Result', 'res', sort, desc, title='Sorted by margin') }}
+      {{ sort_th('GS', 'gs', sort, desc, title='Started') }}
+      {{ sort_th('MIN', 'min', sort, desc) }}
+      {{ sort_th('PTS', 'pts', sort, desc) }}
+      {{ sort_th('REB', 'reb', sort, desc) }}
+      {{ sort_th('AST', 'ast', sort, desc) }}
+      {{ sort_th('STL', 'stl', sort, desc) }}
+      {{ sort_th('BLK', 'blk', sort, desc) }}
+      {{ sort_th('TOV', 'tov', sort, desc) }}
+      {{ sort_th('FG', 'fg', sort, desc, title='Made-attempted, sorted by made') }}
+      {{ sort_th('3P', '3p', sort, desc, title='Made-attempted, sorted by made') }}
+      {{ sort_th('FT', 'ft', sort, desc, title='Made-attempted, sorted by made') }}
+      {{ sort_th('+/-', 'pm', sort, desc) }}
+    </tr></thead>
+    <tbody>
+    {% for r in log %}
+      <tr{% if not r.played %} class="dnp"{% endif %}>
+        <td class="num nowrap">{{ r.game_date | date }}</td>
+        <td class="num nowrap">{{ 'vs' if r.is_home else '@' }} {{ r.opp }}</td>
+        <td class="num nowrap">
+          {% if r.team_pts is not none %}
+            <span class="{{ 'win' if r.won else 'loss' }}">{{ 'W' if r.won else 'L' }}</span>
+            {{ r.team_pts }}–{{ r.opp_pts }}{% if r.is_overtime %} <span class="muted small">{{ 'OT' if r.periods == 5 else (r.periods - 4) ~ 'OT' }}</span>{% endif %}
+          {% else %}—{% endif %}
+        </td>
+        {% if r.played %}
+          <td class="num">{{ '✓' if r.is_starter else '' }}</td>
+          <td class="num">{{ r.sec | mmss }}</td>
+          <td class="num strong">{{ r.pts }}</td><td class="num">{{ r.reb }}</td><td class="num">{{ r.ast }}</td>
+          <td class="num">{{ r.stl }}</td><td class="num">{{ r.blk }}</td><td class="num">{{ r.tov }}</td>
+          <td class="num nowrap">{{ r.fgm }}-{{ r.fga }}</td><td class="num nowrap">{{ r.fg3m }}-{{ r.fg3a }}</td>
+          <td class="num nowrap">{{ r.ftm }}-{{ r.fta }}</td><td class="num">{{ r.plus_minus | signed }}</td>
+        {% else %}
+          <td colspan="12" class="muted">{{ r.status_comment or 'Did not play' }}</td>
+        {% endif %}
+      </tr>
+    {% endfor %}
+    </tbody>
+    {% if average %}
+    <tfoot>
+      <tr class="total">
+        <td colspan="3">Average ({{ average.gp }} game{{ 's' if average.gp != 1 }})</td>
+        <td class="num">{{ average.gs }}</td>
+        <td class="num">{{ average.min_pg | f1 }}</td>
+        {% for k in ['pts', 'reb', 'ast', 'stl', 'blk', 'tov'] %}<td class="num">{{ average[k ~ '_pg'] | f1 }}</td>{% endfor %}
+        <td class="num">{{ average.fg_pct | pct }}%</td><td class="num">{{ average.fg3_pct | pct }}%</td>
+        <td class="num">{{ average.ft_pct | pct }}%</td><td class="num">{{ average.plus_minus_pg | f1 }}</td>
+      </tr>
+    </tfoot>
+    {% endif %}
+  </table>
+  </div>
+  <p class="muted small">Box scores for each game come in phase 2.</p>
+{% endif %}
+{% endblock %}
